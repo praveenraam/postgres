@@ -22,6 +22,11 @@ OBJS = \
 	mcxt.o \
 	memdebug.o \
 	portalmem.o \
-	slab.o
+	slab.o \
+	slaballocator.o \
+	dll.o \
+	pointerstack.o \
+	my_slab.o \
+	slabcache.o
 
 include $(top_srcdir)/src/backend/common.mk

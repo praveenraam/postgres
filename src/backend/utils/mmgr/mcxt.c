@@ -45,6 +45,7 @@
 #include "utils/memutils_internal.h"
 #include "utils/memutils_memorychunk.h"
 
+#include "headers/slaballocator.h"
 
 static void BogusFree(void *pointer);
 static void *BogusRealloc(void *pointer, Size size, int flags);
@@ -131,6 +132,19 @@ static const MemoryContextMethods mcxt_methods[] = {
 	[MCTX_BUMP_ID].check = BumpCheck,
 #endif
 
+	/* slaballocatoer.c */
+	[MCTX_MY_SLAB_ALLOCATER_ID].alloc = SA_Allocater,
+	[MCTX_MY_SLAB_ALLOCATER_ID].free_p = SA_Deallocater,
+	[MCTX_MY_SLAB_ALLOCATER_ID].realloc = SA_Reallocater,
+	[MCTX_MY_SLAB_ALLOCATER_ID].reset = SA_Reset,
+	[MCTX_MY_SLAB_ALLOCATER_ID].delete_context = SA_DeleteContext,
+	[MCTX_MY_SLAB_ALLOCATER_ID].get_chunk_context = SA_get_chunk_context,
+	[MCTX_MY_SLAB_ALLOCATER_ID].get_chunk_space = SA_get_chunk_space,
+	[MCTX_MY_SLAB_ALLOCATER_ID].is_empty = SA_isEmpty,
+	[MCTX_MY_SLAB_ALLOCATER_ID].stats = SA_stats,
+#ifdef MEMORY_CONTEXT_CHECKING
+	[MCTX_MY_SLAB_ALLOCATER_ID].check = SA_Check,
+#endif
 
 	/*
 	 * Reserved and unused IDs should have dummy entries here.  This allows us
@@ -302,6 +316,7 @@ MemoryContextTraverseNext(MemoryContext curr, MemoryContext top)
 static void
 BogusFree(void *pointer)
 {
+	pg_usleep(10000000);
 	elog(ERROR, "pfree called with invalid pointer %p (header 0x%016" PRIx64 ")",
 		 pointer, GetMemoryChunkHeader(pointer));
 }
@@ -357,13 +372,23 @@ MemoryContextInit(void)
 {
 	Assert(TopMemoryContext == NULL);
 
+	fprintf(stderr, "Reached sleep, connect debugger\n");
+
+	// static int a = 0;
+	// if (a == 0){
+	// 	a = 1;
+	// 	pg_usleep(10000000L);
+	// }
+
 	/*
 	 * First, initialize TopMemoryContext, which is the parent of all others.
 	 */
-	TopMemoryContext = AllocSetContextCreate((MemoryContext) NULL,
-											 "TopMemoryContext",
-											 ALLOCSET_DEFAULT_SIZES);
-
+	fprintf(stderr, "Initializing Memory Context...\n");
+	// TopMemoryContext = AllocSetContextCreate((MemoryContext) NULL,
+	// 										 "TopMemoryContext",
+	// 										 ALLOCSET_DEFAULT_SIZES);
+	TopMemoryContext = SA_ContextCreate((MemoryContext) NULL, "TopMemoryContext");
+	fprintf(stderr, "Work done...\n");
 	/*
 	 * Not having any other place to point CurrentMemoryContext, make it point
 	 * to TopMemoryContext.  Caller should change this soon!
@@ -388,6 +413,7 @@ MemoryContextInit(void)
 										 8 * 1024,
 										 8 * 1024,
 										 8 * 1024);
+	// ErrorContext = SA_ContextCreate(TopMemoryContext, "ErrorContext");
 	MemoryContextAllowInCriticalSection(ErrorContext, true);
 }
 
