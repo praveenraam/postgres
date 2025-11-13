@@ -8,9 +8,11 @@ SlabStorage* SlabStorageInit(size_t c_object_size ,size_t c_memoryArraySize) {
         return NULL;
     }
 
+    size_t slot_size = c_object_size + sizeof(MemoryChunk); // here added new
+
     slab->memoryArraySize = c_memoryArraySize;
     slab->objectSize = c_object_size;
-    slab->totalMemorySizeOfArray = c_memoryArraySize*c_object_size;
+    slab->totalMemorySizeOfArray = c_memoryArraySize*slot_size; // updated from object size to slot size
     slab->usedMemorySizeOfArray = 0;
 
     slab->MemoryArray = malloc(slab->totalMemorySizeOfArray);
@@ -46,32 +48,33 @@ void* SlabStorageAllocater(SlabStorage* slab){
             }
             // printf("stack is empty\n");
             returnPtr = slab->FreeSlabIterPointer;
-            slab->FreeSlabIterPointer = (char*)slab->FreeSlabIterPointer + slab->objectSize;
+            slab->FreeSlabIterPointer = (char*)slab->FreeSlabIterPointer + slab->objectSize + sizeof(MemoryChunk);
         }
         else{
             // printf("Stack is Not empty\n");
             returnPtr = StackPop(slab->ptrStackInSlab);
         }
 
-        slab->usedMemorySizeOfArray = slab->usedMemorySizeOfArray + slab->objectSize;
+        slab->usedMemorySizeOfArray = slab->usedMemorySizeOfArray + slab->objectSize + sizeof(MemoryChunk);
         slab->status = slab->totalMemorySizeOfArray == slab->usedMemorySizeOfArray ? FULL : PARTIAL;
 
         // printf("Memory allocated\n");
         // call memory manager add
+
         return returnPtr;
     }
     return NULL;
 }
 
 void SlabStorageDeallocater(SlabStorage* slab, void* ptr){
+    ptr = ptr - sizeof(MemoryChunk);
     int fromMemory = (char*)ptr - (char*)slab->MemoryArray;
 
     if(fromMemory >= 0 && fromMemory < slab->totalMemorySizeOfArray){
 
-        if(fromMemory % slab->objectSize != 0){
-            // printf("Ptr is not pointing the proper memory address\n");
-            return;
-        }
+        // if(fromMemory % slab->objectSize != 0){
+        //     return;
+        // }
 
         StackPush(slab->ptrStackInSlab,ptr);
 

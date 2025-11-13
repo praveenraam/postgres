@@ -3,6 +3,18 @@
 
 static SlabAllocator* gInstance = NULL;
 
+static inline uint64
+SA_EncodeHdrMask(MemoryContext context)
+{
+    // In PostgreSQL, this encodes context pointer + alignment info.
+    // For now, just cast the context pointer to an integer.
+    return (uint64)(uintptr_t)context;
+}
+
+#define SA_SetChunkHdrMask(chunk, context) \
+    ((chunk)->hdrmask = SA_EncodeHdrMask(context))
+
+
 SlabAllocator* getInstanceOfSA() {
     if (gInstance == NULL) {
         gInstance = (SlabAllocator*)malloc(sizeof(SlabAllocator));
@@ -49,6 +61,23 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
     if (cache == NULL) {
         return NULL;
     }
+
+    Size total_size = sizeof(MemoryChunk) + object_size;
+    void *raw_ptr = SlabCacheAllocate(cache);
+    if (raw_ptr == NULL)
+        return NULL;
+
+    MemoryChunk *chunk = (MemoryChunk *) raw_ptr;
+
+    #ifdef MEMORY_CONTEXT_CHECKING
+        chunk->requested_size = object_size;
+    #endif
+
+    MemoryChunkSetHdrMask(chunk, (void*)chunk, object_size, MCTX_MY_SLAB_ALLOCATER_ID);
+
+    void *user_ptr = (void *)((char *)chunk + sizeof(MemoryChunk));
+
+    return user_ptr;
 }
 
 void SA_Deallocater(void* ptr){

@@ -316,7 +316,7 @@ MemoryContextTraverseNext(MemoryContext curr, MemoryContext top)
 static void
 BogusFree(void *pointer)
 {
-	pg_usleep(10000000);
+	// pg_usleep(10000000);
 	elog(ERROR, "pfree called with invalid pointer %p (header 0x%016" PRIx64 ")",
 		 pointer, GetMemoryChunkHeader(pointer));
 }
@@ -383,12 +383,12 @@ MemoryContextInit(void)
 	/*
 	 * First, initialize TopMemoryContext, which is the parent of all others.
 	 */
-	fprintf(stderr, "Initializing Memory Context...\n");
+	// fprintf(stderr, "Initializing Memory Context...\n");
 	// TopMemoryContext = AllocSetContextCreate((MemoryContext) NULL,
 	// 										 "TopMemoryContext",
 	// 										 ALLOCSET_DEFAULT_SIZES);
 	TopMemoryContext = SA_ContextCreate((MemoryContext) NULL, "TopMemoryContext");
-	fprintf(stderr, "Work done...\n");
+	// fprintf(stderr, "Work done...\n");
 	/*
 	 * Not having any other place to point CurrentMemoryContext, make it point
 	 * to TopMemoryContext.  Caller should change this soon!

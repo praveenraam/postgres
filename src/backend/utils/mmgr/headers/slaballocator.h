@@ -5,23 +5,15 @@
 #include <pthread.h>
 #include "./slabcache.h"
 #include "./dll.h"
-#include "postgres.h"
-
-#include "mb/pg_wchar.h"
-#include "miscadmin.h"
-#include "utils/memdebug.h"
-#include "utils/memutils.h"
-#include "utils/memutils_internal.h"
-#include "utils/memutils_memorychunk.h"
 
 struct DLL;
 
-typedef struct SlabMemoryChunkData
-{
-    MemoryContext context;  // owning context (the SA_Allocator's MemoryContext)
-    uint16 cache_id;        // optional - if you want to identify which SlabCache
-    uint16 reserved;        // align to 8 bytes
-} SlabMemoryChunkData;
+// typedef struct SlabMemoryChunkData
+// {
+//     MemoryContext context;  // owning context (the SA_Allocator's MemoryContext)
+//     uint16 cache_id;        // optional - if you want to identify which SlabCache
+//     uint16 reserved;        // align to 8 bytes
+// } SlabMemoryChunkData;
 
 typedef struct {
     MemoryContextData header;
