@@ -29,8 +29,15 @@ SlabAllocator* getInstanceOfSA() {
 }
 
 void* SA_Allocater(MemoryContext context, Size object_size, int flags){
-
+    
     SlabAllocator *instance = (SlabAllocator *) context;
+
+    if(instance == NULL){
+        instance = getInstanceOfSA();
+    }
+
+    static int count = 0;
+    count++;
 
     pthread_mutex_lock(&instance->allocator_mutex);
 
@@ -64,8 +71,11 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
 
     Size total_size = sizeof(MemoryChunk) + object_size;
     void *raw_ptr = SlabCacheAllocate(cache);
-    if (raw_ptr == NULL)
+    // fprintf(stderr,"Allocating %i : ",count);
+    if (raw_ptr == NULL){
+        // fprintf(stderr,"raw_ptr is null : ");
         return NULL;
+    }
 
     MemoryChunk *chunk = (MemoryChunk *) raw_ptr;
 
@@ -76,6 +86,7 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
     MemoryChunkSetHdrMask(chunk, (void*)chunk, object_size, MCTX_MY_SLAB_ALLOCATER_ID);
 
     void *user_ptr = (void *)((char *)chunk + sizeof(MemoryChunk));
+    // fprintf(stderr,"Allocator %p %i\n",user_ptr,object_size);
 
     return user_ptr;
 }

@@ -44,6 +44,7 @@ void* SlabStorageAllocater(SlabStorage* slab){
         
         if(StackIsEmpty(slab->ptrStackInSlab)){
             if((char*)slab->FreeSlabIterPointer >= (char*)slab->MemoryArray + slab->totalMemorySizeOfArray){
+                fprintf(stderr,"Storage is FULL : ");
                 return NULL;
             }
             // printf("stack is empty\n");
@@ -78,7 +79,7 @@ void SlabStorageDeallocater(SlabStorage* slab, void* ptr){
 
         StackPush(slab->ptrStackInSlab,ptr);
 
-        slab->usedMemorySizeOfArray = slab->usedMemorySizeOfArray-slab->objectSize;
+        slab->usedMemorySizeOfArray = slab->usedMemorySizeOfArray-slab->objectSize-sizeof(MemoryChunk);
 
         slab->status = slab->usedMemorySizeOfArray == 0 ? EMPTY : PARTIAL;
 

@@ -372,7 +372,7 @@ MemoryContextInit(void)
 {
 	Assert(TopMemoryContext == NULL);
 
-	fprintf(stderr, "Reached sleep, connect debugger\n");
+	// fprintf(stderr, "Reached sleep, connect debugger\n");
 
 	// static int a = 0;
 	// if (a == 0){
