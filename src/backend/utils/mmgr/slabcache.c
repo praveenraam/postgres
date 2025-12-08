@@ -294,7 +294,7 @@ size_t freeSpaceSlabCache(SlabCache* cache){
     DLL* current = cache->headerForPartial;
     while(current != NULL){
         SlabStorage* slabDetail = current->slabInDLL;
-        returnValue += slabDetail->totalMemorySizeOfArray; - slabDetail->usedMemorySizeOfArray;
+        returnValue += slabDetail->totalMemorySizeOfArray - slabDetail->usedMemorySizeOfArray;
         current = current->next;
     }
     

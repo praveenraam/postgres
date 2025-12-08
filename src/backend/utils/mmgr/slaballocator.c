@@ -291,45 +291,65 @@ void SA_stats(MemoryContext context, MemoryStatsPrintFunc printfunc, void *passt
     Size freeChunks = 0;
     Size totalSpace = 0;
     Size freeSpace = 0;
+    Size slabCacheCount = 0;  // Counter for the number of slab caches
 
     pthread_mutex_lock(&instance->allocator_mutex);
 
     if(instance->headerForCacheList == NULL){
         pthread_mutex_unlock(&instance->allocator_mutex);
-        return 0;
+        return;
     }
 
     DLL* current = instance->headerForCacheList;
     while(current != NULL){
-
         SlabCache* cache = current->slabCacheInDLL;
-        
+
+        // Accumulate total blocks, free chunks, and total space
         nBlocks += nBlocksCountSlabCache(cache);
         freeChunks += freeChunksSlabCache(cache);
         totalSpace += totalSpaceSlabCache(cache);
         freeSpace += freeSpaceSlabCache(cache);
+        
+        // Increment slab cache count
+        slabCacheCount++; 
 
         current = current->next;
     }
 
+    // Ensure that freeSpace doesn't go negative
+    if (freeSpace > totalSpace) {
+        freeSpace = totalSpace;  // Set free space to total space if there is a mismatch
+    }
+
+    // Calculate used space correctly
+    Size usedSpace = totalSpace - freeSpace;
+
+    // Calculate average blocks per slab cache
+    Size averageBlocksPerCache = (slabCacheCount > 0) ? nBlocks / slabCacheCount : 0;
 
     if(printfunc){
 
-		char		stats_string[200];
+        // Updated format string with additional fields
+        char stats_string[300];
 
-		snprintf(stats_string, sizeof(stats_string),
-				 "%zu total in %zu blocks; %zu free (%zu chunks); %zu used",
-				 totalSpace, nBlocks, freeSpace, freeChunks,
-				 totalSpace - freeSpace);
-		printfunc(context, passthru, stats_string, print_to_stderr);
+        // Adjust the format string for alignment and make sure all values are printed
+        snprintf(stats_string, sizeof(stats_string),
+                "%-20s| %-12zu | %-14zu | %-10zu | %-10zu | %-14zu | %-20zu",
+                "TopMemoryContext", totalSpace, nBlocks, freeSpace, usedSpace,
+                slabCacheCount, averageBlocksPerCache);
+
+        // Print the stats
+        printfunc(context, passthru, stats_string, print_to_stderr);
     }
 
     if(totals){
         totals->nblocks += nBlocks;
-		totals->freechunks += freeChunks;
-		totals->totalspace += totalSpace;
-		totals->freespace += freeSpace;
+        totals->freechunks += freeChunks;
+        totals->totalspace += totalSpace;
+        totals->freespace += freeSpace;
     }
+
+    pthread_mutex_unlock(&instance->allocator_mutex);
 
 }
 
