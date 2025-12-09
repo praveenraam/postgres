@@ -32,7 +32,7 @@ SlabAllocator* getInstanceOfSA() {
 }
 
 void* SA_Allocater(MemoryContext context, Size object_size, int flags){
-   fprintf(stderr, "Entered SA_Allocater (size=%zu)\n", (size_t) object_size);
+//    fprintf(stderr, "Entered SA_Allocater (size=%zu)\n", (size_t) object_size);
 
     SlabAllocator *instance = (SlabAllocator *) context;
 
@@ -93,15 +93,15 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
     MemoryChunkSetHdrMask(chunk, (void*)block, object_size, MCTX_MY_SLAB_ALLOCATER_ID);
     void *user_ptr = (void *)((char *)chunk + sizeof(MemoryChunk));
 
-    fprintf(stderr,
-            "SA_Allocater: unit=%p block=%p chunk=%p user=%p\n",
-            raw_unit, (void*)block, (void*)chunk, user_ptr);
+    // fprintf(stderr,
+    //         "SA_Allocater: unit=%p block=%p chunk=%p user=%p\n",
+    //         raw_unit, (void*)block, (void*)chunk, user_ptr);
 
     return user_ptr;
 }
 
 void SA_Deallocater(void* ptr){
-    fprintf(stderr, "Entered SA_Deallocater ptr=%p\n", ptr);
+    // fprintf(stderr, "Entered SA_Deallocater ptr=%p\n", ptr);
     
     if (ptr == NULL)
         return;
@@ -109,7 +109,7 @@ void SA_Deallocater(void* ptr){
     if(ptr == NULL) return;
     
     MemoryChunk *chunk = PointerGetMemoryChunk(ptr);
-    fprintf(stderr, "  chunk=%p\n", (void*)chunk);
+    // fprintf(stderr, "  chunk=%p\n", (void*)chunk);
     
     if (MemoryChunkIsExternal(chunk))
     {
@@ -119,7 +119,7 @@ void SA_Deallocater(void* ptr){
     }
 
     SlabBlock *block = (SlabBlock *) MemoryChunkGetBlock(chunk);
-    fprintf(stderr, "  block=%p\n", (void*)block);
+    // fprintf(stderr, "  block=%p\n", (void*)block);
 
 
     SlabAllocator *instance = block->current_slab;
@@ -151,11 +151,10 @@ void SA_Deallocater(void* ptr){
 
 void* SA_Reallocater(void* from_address, Size new_required_size, int flags)
 {
-    fprintf(stderr,"Entered ReAllocatoer\n");
+    // fprintf(stderr,"Entered ReAllocatoer for %p\n",from_address);
 
-    SlabAllocator* instance = getInstanceOfSA();
-
-    if(new_required_size == 0){
+    if (new_required_size == 0)
+    {
         SA_Deallocater(from_address);
         return NULL;
     }
@@ -164,47 +163,64 @@ void* SA_Reallocater(void* from_address, Size new_required_size, int flags)
         return SA_Allocater((MemoryContext)NULL, new_required_size,0);
     }
 
-    void* new_address = SA_Allocater((MemoryContext)NULL, new_required_size,0);
+    MemoryChunk *old_chunk = PointerGetMemoryChunk(from_address);
 
-    if(new_address == NULL) return NULL;
+    if (MemoryChunkIsExternal(old_chunk))
+    {
+        void *new_address =
+            SA_Allocater((MemoryContext) NULL, new_required_size, flags);
 
-    Size current_size = SA_GetSizeOfObject(from_address);
-    if(current_size == 0){
+        if (new_address == NULL)
+            return NULL;
+
+        Size current_size = SA_GetSizeOfObject(from_address);
+        Size copy_size = (new_required_size < current_size)
+                         ? new_required_size
+                         : current_size;
+
+        if (copy_size > 0)
+            memcpy(new_address, from_address, copy_size);
+
+        SA_Deallocater(from_address);
         return new_address;
     }
 
-    size_t copy_size = new_required_size < current_size ? new_required_size : current_size;
-    memcpy(new_address,from_address,copy_size);
+    SlabBlock *block = (SlabBlock *) MemoryChunkGetBlock(old_chunk);
+    SlabAllocator *instance = block->current_slab;
 
+    MemoryContext ctx = (instance != NULL) ? (MemoryContext) instance : (MemoryContext) NULL;
+
+    void *new_address = SA_Allocater(ctx, new_required_size, flags);
+    if (new_address == NULL)
+        return NULL;
+
+    Size current_size = SA_GetSizeOfObject(from_address);
+    if (current_size == 0){
+        SA_Deallocater(from_address);
+        return new_address;
+    }
+
+    size_t copy_size = (new_required_size < current_size) ? new_required_size : current_size;
+
+    memcpy(new_address, from_address, copy_size);
+    
     SA_Deallocater(from_address);
+
     return new_address;
 }
 
 size_t SA_GetSizeOfObject(void* ptr){
 
-    SlabAllocator* instance = getInstanceOfSA();
+    if (ptr == NULL)
+        return 0;
 
-    pthread_mutex_lock(&instance->allocator_mutex);
+    MemoryChunk *chunk = PointerGetMemoryChunk(ptr);
 
-    if(instance->headerForCacheList == NULL){
-        pthread_mutex_unlock(&instance->allocator_mutex);
+    if(MemoryChunkIsExternal(chunk)){
         return 0;
     }
 
-    DLL* current = instance->headerForCacheList;
-    while(current != NULL){
-
-        if(isPtrInSlabCache(current->slabCacheInDLL,ptr)){
-            size_t object_size = current->slabCacheInDLL->object_size;
-            pthread_mutex_unlock(&instance->allocator_mutex);
-            return object_size;
-        }
-
-        current = current->next;
-    }
-
-    pthread_mutex_unlock(&instance->allocator_mutex);
-    return 0;
+    return MemoryChunkGetValue(chunk);
 }
 
 void SA_Reset(MemoryContext context){
