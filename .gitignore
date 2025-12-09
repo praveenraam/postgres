@@ -44,3 +44,5 @@ lib*.pc
 /tmp_install/
 /portlock/
 \cbuild
+src/test/regress/regression.diffs
+src/test/regress/regression.out

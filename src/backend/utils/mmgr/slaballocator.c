@@ -29,15 +29,12 @@ SlabAllocator* getInstanceOfSA() {
 }
 
 void* SA_Allocater(MemoryContext context, Size object_size, int flags){
-    
+    fprintf(stderr,"Entered Allocatoer\n");
     SlabAllocator *instance = (SlabAllocator *) context;
 
     if(instance == NULL){
         instance = getInstanceOfSA();
     }
-
-    static int count = 0;
-    count++;
 
     pthread_mutex_lock(&instance->allocator_mutex);
 
@@ -69,7 +66,6 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
         return NULL;
     }
 
-    Size total_size = sizeof(MemoryChunk) + object_size;
     void *raw_ptr = SlabCacheAllocate(cache);
     // fprintf(stderr,"Allocating %i : ",count);
     if (raw_ptr == NULL){
@@ -83,16 +79,18 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
         chunk->requested_size = object_size;
     #endif
 
-    MemoryChunkSetHdrMask(chunk, (void*)chunk, object_size, MCTX_MY_SLAB_ALLOCATER_ID);
+    MemoryChunkSetHdrMask(chunk, (void*)context, object_size, MCTX_MY_SLAB_ALLOCATER_ID);
 
-    void *user_ptr = (void *)((char *)chunk + sizeof(MemoryChunk));
+    void *user_ptr = (void *)((char *)chunk + sizeof(MemoryContext));
     // fprintf(stderr,"Allocator %p %i\n",user_ptr,object_size);
 
     return user_ptr;
 }
 
 void SA_Deallocater(void* ptr){
+    fprintf(stderr,"Entered Dellocatoer\n");
 
+    // SlabAllocator* instance = (SlabAllocator*)((MemoryContext *) ((char *) (ptr) - sizeof(MemoryContext)));
     SlabAllocator* instance = getInstanceOfSA();
 
     pthread_mutex_lock(&instance->allocator_mutex);
@@ -115,6 +113,8 @@ void SA_Deallocater(void* ptr){
 
 void* SA_Reallocater(void* from_address, Size new_required_size, int flags)
 {
+    fprintf(stderr,"Entered ReAllocatoer\n");
+
     SlabAllocator* instance = getInstanceOfSA();
 
     if(new_required_size == 0){
@@ -187,6 +187,7 @@ void SA_Reset(MemoryContext context){
         current = NULL;
         current = nextCache;
     }
+    pthread_mutex_unlock(&instance->allocator_mutex);
 }
 
 void SA_DeleteContext(MemoryContext context){

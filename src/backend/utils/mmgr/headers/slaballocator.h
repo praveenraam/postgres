@@ -23,6 +23,11 @@ typedef struct {
 
 } SlabAllocator;
 
+typedef struct {
+    SlabAllocator* CurrentSlab;
+
+} slabBlock;
+
 SlabAllocator* getInstanceOfSA();
 void* SA_Allocater(MemoryContext context, Size object_size, int flags);
 void SA_Deallocater(void* ptr);
