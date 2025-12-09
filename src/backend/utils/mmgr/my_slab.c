@@ -8,7 +8,7 @@ SlabStorage* SlabStorageInit(size_t c_object_size ,size_t c_memoryArraySize) {
         return NULL;
     }
 
-    size_t slot_size = c_object_size + sizeof(MemoryChunk); // here added new
+    size_t slot_size = c_object_size; // here added new
 
     slab->memoryArraySize = c_memoryArraySize;
     slab->objectSize = c_object_size;
@@ -49,14 +49,14 @@ void* SlabStorageAllocater(SlabStorage* slab){
             }
             // printf("stack is empty\n");
             returnPtr = slab->FreeSlabIterPointer;
-            slab->FreeSlabIterPointer = (char*)slab->FreeSlabIterPointer + slab->objectSize + sizeof(MemoryChunk);
+            slab->FreeSlabIterPointer = (char*)slab->FreeSlabIterPointer + slab->objectSize;
         }
         else{
             // printf("Stack is Not empty\n");
             returnPtr = StackPop(slab->ptrStackInSlab);
         }
 
-        slab->usedMemorySizeOfArray = slab->usedMemorySizeOfArray + slab->objectSize + sizeof(MemoryChunk);
+        slab->usedMemorySizeOfArray = slab->usedMemorySizeOfArray + slab->objectSize;
         slab->status = slab->totalMemorySizeOfArray == slab->usedMemorySizeOfArray ? FULL : PARTIAL;
 
         // printf("Memory allocated\n");
@@ -68,7 +68,7 @@ void* SlabStorageAllocater(SlabStorage* slab){
 }
 
 void SlabStorageDeallocater(SlabStorage* slab, void* ptr){
-    ptr = ptr - sizeof(MemoryChunk);
+    ptr = ptr;
     int fromMemory = (char*)ptr - (char*)slab->MemoryArray;
 
     if(fromMemory >= 0 && fromMemory < slab->totalMemorySizeOfArray){
@@ -79,7 +79,7 @@ void SlabStorageDeallocater(SlabStorage* slab, void* ptr){
 
         StackPush(slab->ptrStackInSlab,ptr);
 
-        slab->usedMemorySizeOfArray = slab->usedMemorySizeOfArray-slab->objectSize-sizeof(MemoryChunk);
+        slab->usedMemorySizeOfArray = slab->usedMemorySizeOfArray-slab->objectSize;
 
         slab->status = slab->usedMemorySizeOfArray == 0 ? EMPTY : PARTIAL;
 

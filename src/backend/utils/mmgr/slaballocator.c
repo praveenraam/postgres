@@ -19,9 +19,12 @@ SlabAllocator* getInstanceOfSA() {
     if (gInstance == NULL) {
         gInstance = (SlabAllocator*)malloc(sizeof(SlabAllocator));
         if (gInstance != NULL) {
+
+            memset(gInstance, 0, sizeof(SlabAllocator));            
+
             gInstance->headerForCacheList = NULL;
             gInstance->tailForCacheList = NULL;
-
+            
             pthread_mutex_init(&gInstance->allocator_mutex, NULL);
         }
     }
@@ -29,13 +32,17 @@ SlabAllocator* getInstanceOfSA() {
 }
 
 void* SA_Allocater(MemoryContext context, Size object_size, int flags){
-    fprintf(stderr,"Entered Allocatoer\n");
+   fprintf(stderr, "Entered SA_Allocater (size=%zu)\n", (size_t) object_size);
+
     SlabAllocator *instance = (SlabAllocator *) context;
 
-    if(instance == NULL){
+    if (instance == NULL)
         instance = getInstanceOfSA();
-    }
 
+    if (instance == NULL)
+        return NULL;
+
+    
     pthread_mutex_lock(&instance->allocator_mutex);
 
     if(instance->headerForCacheList == NULL){
@@ -66,33 +73,65 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
         return NULL;
     }
 
-    void *raw_ptr = SlabCacheAllocate(cache);
-    // fprintf(stderr,"Allocating %i : ",count);
-    if (raw_ptr == NULL){
-        // fprintf(stderr,"raw_ptr is null : ");
+    void *raw_unit = SlabCacheAllocate(cache);
+    if (raw_unit == NULL){
         return NULL;
     }
 
-    MemoryChunk *chunk = (MemoryChunk *) raw_ptr;
+    SlabBlock *block = (SlabBlock *) raw_unit;
+    block->current_slab = instance;
+    block->cache        = cache;
+
+    MemoryChunk *chunk = (MemoryChunk *)
+        ((char *) raw_unit + sizeof(SlabBlock));
+
 
     #ifdef MEMORY_CONTEXT_CHECKING
         chunk->requested_size = object_size;
     #endif
 
-    MemoryChunkSetHdrMask(chunk, (void*)context, object_size, MCTX_MY_SLAB_ALLOCATER_ID);
+    MemoryChunkSetHdrMask(chunk, (void*)block, object_size, MCTX_MY_SLAB_ALLOCATER_ID);
+    void *user_ptr = (void *)((char *)chunk + sizeof(MemoryChunk));
 
-    void *user_ptr = (void *)((char *)chunk + sizeof(MemoryContext));
-    // fprintf(stderr,"Allocator %p %i\n",user_ptr,object_size);
+    fprintf(stderr,
+            "SA_Allocater: unit=%p block=%p chunk=%p user=%p\n",
+            raw_unit, (void*)block, (void*)chunk, user_ptr);
 
     return user_ptr;
 }
 
 void SA_Deallocater(void* ptr){
-    fprintf(stderr,"Entered Dellocatoer\n");
+    fprintf(stderr, "Entered SA_Deallocater ptr=%p\n", ptr);
+    
+    if (ptr == NULL)
+        return;
 
-    // SlabAllocator* instance = (SlabAllocator*)((MemoryContext *) ((char *) (ptr) - sizeof(MemoryContext)));
-    SlabAllocator* instance = getInstanceOfSA();
+    if(ptr == NULL) return;
+    
+    MemoryChunk *chunk = PointerGetMemoryChunk(ptr);
+    fprintf(stderr, "  chunk=%p\n", (void*)chunk);
+    
+    if (MemoryChunkIsExternal(chunk))
+    {
+        fprintf(stderr,
+                "SA_Deallocater: external chunk passed, cannot free via SlabAllocator\n");
+        return;
+    }
 
+    SlabBlock *block = (SlabBlock *) MemoryChunkGetBlock(chunk);
+    fprintf(stderr, "  block=%p\n", (void*)block);
+
+
+    SlabAllocator *instance = block->current_slab;
+    SlabCache     *cache    = block->cache;
+
+    if (instance == NULL || cache == NULL)
+    {
+        fprintf(stderr,
+                "SA_Deallocater: corrupted block header (instance/cache NULL)\n");
+        return;
+    }
+    
     pthread_mutex_lock(&instance->allocator_mutex);
 
     if(instance->headerForCacheList == NULL){
@@ -102,9 +141,8 @@ void SA_Deallocater(void* ptr){
 
     DLL* current = instance->headerForCacheList;
     while(current != NULL){
-
         SlabCache* cache = current->slabCacheInDLL;
-        SlabCacheDeallocator(cache, ptr);
+        SlabCacheDeallocator(cache, (void*) block);
 
         current = current->next;
     }

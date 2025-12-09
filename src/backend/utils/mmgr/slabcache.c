@@ -10,6 +10,7 @@ SlabCache* SlabCacheInit(size_t c_object_size){
     }
 
     cache->object_size = c_object_size;
+    cache->unit_size = sizeof(SlabBlock) + sizeof(MemoryChunk) + c_object_size;
     
     cache->headerForFull = NULL;
     cache->tailForFull = NULL;
@@ -44,7 +45,7 @@ void* SlabCacheAllocate(SlabCache* cache){
     pthread_mutex_lock(&cache->cache_mutex);
 
     if(isDDL_ForPartialEmpty(cache)){
-        SlabStorage* newSlab = SlabStorageInit(cache->object_size,10);
+        SlabStorage* newSlab = SlabStorageInit(cache->unit_size,10);
         if (newSlab == NULL) {
             pthread_mutex_unlock(&cache->cache_mutex);
             return NULL;

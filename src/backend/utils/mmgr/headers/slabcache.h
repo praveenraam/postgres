@@ -3,6 +3,14 @@
 #include <pthread.h>
 struct DLL;
 
+struct SlabBlock;     // forward declaration
+
+typedef struct SlabBlock
+{
+    struct SlabAllocator *current_slab; /* back-pointer to owning allocator */
+    struct SlabCache     *cache;        /* cache that owns this block */
+} SlabBlock;
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -14,6 +22,7 @@ typedef struct {
     struct DLL* headerForPartial;
     struct DLL* tailForPartial;
     size_t object_size;
+    size_t unit_size;
     
     pthread_mutex_t cache_mutex;
     // Cache Manager 

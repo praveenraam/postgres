@@ -8,26 +8,15 @@
 
 struct DLL;
 
-// typedef struct SlabMemoryChunkData
-// {
-//     MemoryContext context;  // owning context (the SA_Allocator's MemoryContext)
-//     uint16 cache_id;        // optional - if you want to identify which SlabCache
-//     uint16 reserved;        // align to 8 bytes
-// } SlabMemoryChunkData;
-
-typedef struct {
+typedef struct SlabAllocator {
     MemoryContextData header;
     struct DLL* headerForCacheList;
     struct DLL* tailForCacheList;
-    pthread_mutex_t allocator_mutex;;
+    pthread_mutex_t allocator_mutex;
 
 } SlabAllocator;
 
-typedef struct {
-    SlabAllocator* CurrentSlab;
-
-} slabBlock;
-
+// ---- function prototypes ----
 SlabAllocator* getInstanceOfSA();
 void* SA_Allocater(MemoryContext context, Size object_size, int flags);
 void SA_Deallocater(void* ptr);
@@ -39,10 +28,9 @@ size_t SA_GetSizeOfObject(void* ptr);
 MemoryContext SA_ContextCreate(MemoryContext parent, const char *name);
 MemoryContext SA_get_chunk_context(void* ptr);
 Size SA_get_chunk_space(void* ptr);
-void SA_stats(MemoryContext context, MemoryStatsPrintFunc printfunc, void *pasthru, MemoryContextCounters *totals, bool print_to_stderr);
-
+void SA_stats(MemoryContext context, MemoryStatsPrintFunc printfunc, void *pasthru, 
+              MemoryContextCounters *totals, bool print_to_stderr);
 
 #ifdef MEMORY_CONTEXT_CHECKING
-    void SA_Check(MemoryContext context);
-#endif							/* MEMORY_CONTEXT_CHECKING */
-
+void SA_Check(MemoryContext context);
+#endif
