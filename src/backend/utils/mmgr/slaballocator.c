@@ -37,7 +37,7 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
     SlabAllocator *instance = (SlabAllocator *) context;
 
     if (instance == NULL)
-        instance = getInstanceOfSA();
+        return NULL;
 
     if (instance == NULL)
         return NULL;
@@ -271,9 +271,17 @@ bool SA_isEmpty(MemoryContext context){
 
 MemoryContext SA_ContextCreate(MemoryContext parent, const char *name)
 {
-    fprintf(stderr,"Calling context create\n");
-    SlabAllocator *sb = getInstanceOfSA();
-    MemSetAligned(sb, 0, sizeof(SlabAllocator));
+    // fprintf(stderr,"Calling context create updated\n");
+
+    SlabAllocator *sb = (SlabAllocator *) malloc(sizeof(SlabAllocator));
+    if (!sb) return NULL;
+
+    memset(sb, 0, sizeof(SlabAllocator));
+
+    sb->headerForCacheList = NULL;
+    sb->tailForCacheList   = NULL;
+
+    pthread_mutex_init(&sb->allocator_mutex, NULL);
 
     MemoryContextCreate(
         (MemoryContext) sb,
