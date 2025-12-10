@@ -271,6 +271,7 @@ bool SA_isEmpty(MemoryContext context){
 
 MemoryContext SA_ContextCreate(MemoryContext parent, const char *name)
 {
+    fprintf(stderr,"Calling context create\n");
     SlabAllocator *sb = getInstanceOfSA();
     MemSetAligned(sb, 0, sizeof(SlabAllocator));
 
@@ -286,57 +287,33 @@ MemoryContext SA_ContextCreate(MemoryContext parent, const char *name)
 }
 
 MemoryContext SA_get_chunk_context(void* ptr){
-
-    SlabAllocator* instance = getInstanceOfSA();
-
-    pthread_mutex_lock(&instance->allocator_mutex);
-
-    if(instance->headerForCacheList == NULL){
-        pthread_mutex_unlock(&instance->allocator_mutex);
+    if (ptr == NULL)
         return NULL;
-    }
 
-    DLL* current = instance->headerForCacheList;
-    while(current != NULL){
+    MemoryChunk *chunk = PointerGetMemoryChunk(ptr);
 
-        if(isPtrInSlabCache(current->slabCacheInDLL,ptr)){
-            pthread_mutex_unlock(&instance->allocator_mutex);
-            return &instance->header;
-        }
+    if (MemoryChunkIsExternal(chunk))
+        return NULL;
 
-        current = current->next;
-    }
+    SlabBlock *block = (SlabBlock *) MemoryChunkGetBlock(chunk);
 
-    pthread_mutex_unlock(&instance->allocator_mutex);
-    return NULL;
+    if (block == NULL || block->current_slab == NULL)
+        return NULL;
 
+    return (MemoryContext) block->current_slab;
 }
 
 Size SA_get_chunk_space(void* ptr){
 
-    SlabAllocator* instance = getInstanceOfSA();
-
-    pthread_mutex_lock(&instance->allocator_mutex);
-
-    if(instance->headerForCacheList == NULL){
-        pthread_mutex_unlock(&instance->allocator_mutex);
+    if (!ptr)
         return 0;
-    }
 
-    DLL* current = instance->headerForCacheList;
-    while(current != NULL){
+    MemoryChunk *chunk = PointerGetMemoryChunk(ptr);
 
-        if(isPtrInSlabCache(current->slabCacheInDLL,ptr)){
-            pthread_mutex_unlock(&instance->allocator_mutex);
-            return SlabCacheReturnFreeSpace(current->slabCacheInDLL,ptr);
-        }
+    if (MemoryChunkIsExternal(chunk))
+        return 0;
 
-        current = current->next;
-    }
-
-    pthread_mutex_unlock(&instance->allocator_mutex);
-    return 0;
-
+    return MemoryChunkGetValue(chunk);
 }
 
 void SA_stats(MemoryContext context, MemoryStatsPrintFunc printfunc, void *passthru, MemoryContextCounters *totals, bool print_to_stderr){
