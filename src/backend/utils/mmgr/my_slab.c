@@ -1,6 +1,8 @@
 #include "./headers/slabStorage.h"
 #include <stdio.h>
 
+#define MAXALIGN 8
+
 SlabStorage* SlabStorageInit(size_t c_object_size ,size_t c_memoryArraySize) {
     SlabStorage* slab = (SlabStorage*)malloc(sizeof(SlabStorage));
 
@@ -11,21 +13,24 @@ SlabStorage* SlabStorageInit(size_t c_object_size ,size_t c_memoryArraySize) {
     size_t slot_size = c_object_size; // here added new
 
     slab->memoryArraySize = c_memoryArraySize;
-    slab->objectSize = c_object_size;
+    slab->objectSize = slot_size;
     slab->totalMemorySizeOfArray = c_memoryArraySize*slot_size; // updated from object size to slot size
     slab->usedMemorySizeOfArray = 0;
 
-    slab->MemoryArray = malloc(slab->totalMemorySizeOfArray);
-    if(slab->MemoryArray == NULL){
+    void *mem = NULL;
+    int rc = posix_memalign(&mem, MAXALIGN, slab->totalMemorySizeOfArray);
+    if (rc != 0 || mem == NULL) {
         free(slab);
         return NULL;
     }
 
+    slab->MemoryArray = mem;
     slab->FreeSlabIterPointer = slab->MemoryArray;
     slab->status = EMPTY;
     slab->ptrStackInSlab = StackInit();
-    
+
     return slab;
+    
 }
 
 void SlabStorageDestroy(SlabStorage* slab)
@@ -38,33 +43,28 @@ void SlabStorageDestroy(SlabStorage* slab)
 }
 
 void* SlabStorageAllocater(SlabStorage* slab){
+    if (slab == NULL) return NULL;
+    if (slab->status == FULL) return NULL;
 
-    if(slab->status != FULL){
-        void* returnPtr;
-        
-        if(StackIsEmpty(slab->ptrStackInSlab)){
-            if((char*)slab->FreeSlabIterPointer >= (char*)slab->MemoryArray + slab->totalMemorySizeOfArray){
-                fprintf(stderr,"Storage is FULL : ");
-                return NULL;
-            }
-            // printf("stack is empty\n");
-            returnPtr = slab->FreeSlabIterPointer;
-            slab->FreeSlabIterPointer = (char*)slab->FreeSlabIterPointer + slab->objectSize;
-        }
-        else{
-            // printf("Stack is Not empty\n");
-            returnPtr = StackPop(slab->ptrStackInSlab);
+    void* returnPtr;
+
+    if (StackIsEmpty(slab->ptrStackInSlab)) {
+        char *iter = (char*)slab->FreeSlabIterPointer;
+        char *end = (char*)slab->MemoryArray + slab->totalMemorySizeOfArray;
+
+        if (iter >= end) {
+            return NULL;
         }
 
-        slab->usedMemorySizeOfArray = slab->usedMemorySizeOfArray + slab->objectSize;
-        slab->status = slab->totalMemorySizeOfArray == slab->usedMemorySizeOfArray ? FULL : PARTIAL;
-
-        // printf("Memory allocated\n");
-        // call memory manager add
-
-        return returnPtr;
+        returnPtr = (void*)iter;
+        slab->FreeSlabIterPointer = (void*)(iter + slab->objectSize);
+    } else {
+        returnPtr = StackPop(slab->ptrStackInSlab);
     }
-    return NULL;
+
+    slab->usedMemorySizeOfArray += slab->objectSize;
+    slab->status = (slab->usedMemorySizeOfArray >= slab->totalMemorySizeOfArray) ? FULL : PARTIAL;
+    return returnPtr;
 }
 
 void SlabStorageDeallocater(SlabStorage* slab, void* ptr){

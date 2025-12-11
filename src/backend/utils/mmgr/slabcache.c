@@ -1,6 +1,8 @@
 #include "./headers/dll.h"
 #include "./headers/slabcache.h"
 
+#define MAXALIGN 8
+
 SlabCache* SlabCacheInit(size_t c_object_size){
 
     SlabCache* cache = (SlabCache*)malloc(sizeof(SlabCache));
@@ -10,7 +12,8 @@ SlabCache* SlabCacheInit(size_t c_object_size){
     }
 
     cache->object_size = c_object_size;
-    cache->unit_size = sizeof(SlabBlock) + sizeof(MemoryChunk) + c_object_size;
+    size_t u = sizeof(SlabBlock) + sizeof(MemoryChunk) + c_object_size;
+    cache->unit_size = (u + (MAXALIGN - 1)) & ~(MAXALIGN - 1);
     
     cache->headerForFull = NULL;
     cache->tailForFull = NULL;
@@ -58,6 +61,7 @@ void* SlabCacheAllocate(SlabCache* cache){
     void* allocatedPtr = SlabStorageAllocater(cache->headerForPartial->slabInDLL);
 
     if (allocatedPtr == NULL) {
+        pthread_mutex_unlock(&cache->cache_mutex);
         return NULL;
     }
 

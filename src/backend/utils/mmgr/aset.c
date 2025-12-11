@@ -347,8 +347,8 @@ AllocSetContextCreateInternal(MemoryContext parent,
 							  Size initBlockSize,
 							  Size maxBlockSize)
 {
-	fprintf(stderr,"\n");
-	fprintf(stderr,name);
+	// fprintf(stderr,"\n");
+	// fprintf(stderr,name);
 	return (MemoryContext) SA_ContextCreate(parent,name);
 
 	// int			freeListIndex;
