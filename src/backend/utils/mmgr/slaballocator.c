@@ -1,35 +1,9 @@
 #include "./headers/slaballocator.h"
 #include <string.h>
 
-static SlabAllocator* gInstance = NULL;
-
-static inline uint64
-SA_EncodeHdrMask(MemoryContext context)
-{
-    // In PostgreSQL, this encodes context pointer + alignment info.
-    // For now, just cast the context pointer to an integer.
-    return (uint64)(uintptr_t)context;
-}
 
 #define SA_SetChunkHdrMask(chunk, context) \
     ((chunk)->hdrmask = SA_EncodeHdrMask(context))
-
-
-// SlabAllocator* getInstanceOfSA() {
-//     if (gInstance == NULL) {
-//         gInstance = (SlabAllocator*)malloc(sizeof(SlabAllocator));
-//         if (gInstance != NULL) {
-
-//             memset(gInstance, 0, sizeof(SlabAllocator));            
-
-//             gInstance->headerForCacheList = NULL;
-//             gInstance->tailForCacheList = NULL;
-            
-//             pthread_mutex_init(&gInstance->allocator_mutex, NULL);
-//         }
-//     }
-//     return gInstance;
-// }
 
 void* SA_Allocater(MemoryContext context, Size object_size, int flags){
 //    fprintf(stderr, "Entered SA_Allocater (size=%zu)\n", (size_t) object_size);
@@ -238,16 +212,18 @@ void SA_Reset(MemoryContext context){
 }
 
 void SA_DeleteContext(MemoryContext context){
-    if (gInstance == NULL) {
+    SlabAllocator* instance = (SlabAllocator*) context;
+
+    if(instance == NULL){
         return;
     }
 
     SA_Reset(context);
 
-    pthread_mutex_destroy(&gInstance->allocator_mutex);
-    free(gInstance);
-    free(context);
-    gInstance = NULL;
+    pthread_mutex_destroy(&instance->allocator_mutex);
+    free(instance);
+
+    // fprintf(stderr,"\nDestroy works correctly\n");
 }
 
 bool SA_isEmpty(MemoryContext context){
