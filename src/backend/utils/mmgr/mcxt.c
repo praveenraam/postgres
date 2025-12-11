@@ -408,12 +408,12 @@ MemoryContextInit(void)
 	 * This should be the last step in this function, as elog.c assumes memory
 	 * management works once ErrorContext is non-null.
 	 */
-	ErrorContext = AllocSetContextCreate(TopMemoryContext,
-										 "ErrorContext",
-										 8 * 1024,
-										 8 * 1024,
-										 8 * 1024);
-	// ErrorContext = SA_ContextCreate(TopMemoryContext, "ErrorContext");
+	// ErrorContext = AllocSetContextCreate(TopMemoryContext,
+	// 									 "ErrorContext",
+	// 									 8 * 1024,
+	// 									 8 * 1024,
+	// 									 8 * 1024);
+	ErrorContext = SA_ContextCreate(TopMemoryContext, "ErrorContext");
 	MemoryContextAllowInCriticalSection(ErrorContext, true);
 }
 

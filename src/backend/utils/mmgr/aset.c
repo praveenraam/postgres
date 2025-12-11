@@ -51,6 +51,7 @@
 #include "utils/memutils.h"
 #include "utils/memutils_internal.h"
 #include "utils/memutils_memorychunk.h"
+#include "./headers/slaballocator.h"
 
 /*--------------------
  * Chunk freelist k holds chunks of size 1 << (k + ALLOC_MINBITS),
@@ -346,190 +347,194 @@ AllocSetContextCreateInternal(MemoryContext parent,
 							  Size initBlockSize,
 							  Size maxBlockSize)
 {
-	int			freeListIndex;
-	Size		firstBlockSize;
-	AllocSet	set;
-	AllocBlock	block;
+	fprintf(stderr,"\n");
+	fprintf(stderr,name);
+	return (MemoryContext) SA_ContextCreate(parent,name);
 
-	/* ensure MemoryChunk's size is properly maxaligned */
-	StaticAssertDecl(ALLOC_CHUNKHDRSZ == MAXALIGN(ALLOC_CHUNKHDRSZ),
-					 "sizeof(MemoryChunk) is not maxaligned");
-	/* check we have enough space to store the freelist link */
-	StaticAssertDecl(sizeof(AllocFreeListLink) <= (1 << ALLOC_MINBITS),
-					 "sizeof(AllocFreeListLink) larger than minimum allocation size");
+	// int			freeListIndex;
+	// Size		firstBlockSize;
+	// AllocSet	set;
+	// AllocBlock	block;
 
-	/*
-	 * First, validate allocation parameters.  Once these were regular runtime
-	 * tests and elog's, but in practice Asserts seem sufficient because
-	 * nobody varies their parameters at runtime.  We somewhat arbitrarily
-	 * enforce a minimum 1K block size.  We restrict the maximum block size to
-	 * MEMORYCHUNK_MAX_BLOCKOFFSET as MemoryChunks are limited to this in
-	 * regards to addressing the offset between the chunk and the block that
-	 * the chunk is stored on.  We would be unable to store the offset between
-	 * the chunk and block for any chunks that were beyond
-	 * MEMORYCHUNK_MAX_BLOCKOFFSET bytes into the block if the block was to be
-	 * larger than this.
-	 */
-	Assert(initBlockSize == MAXALIGN(initBlockSize) &&
-		   initBlockSize >= 1024);
-	Assert(maxBlockSize == MAXALIGN(maxBlockSize) &&
-		   maxBlockSize >= initBlockSize &&
-		   AllocHugeSizeIsValid(maxBlockSize)); /* must be safe to double */
-	Assert(minContextSize == 0 ||
-		   (minContextSize == MAXALIGN(minContextSize) &&
-			minContextSize >= 1024 &&
-			minContextSize <= maxBlockSize));
-	Assert(maxBlockSize <= MEMORYCHUNK_MAX_BLOCKOFFSET);
+	// /* ensure MemoryChunk's size is properly maxaligned */
+	// StaticAssertDecl(ALLOC_CHUNKHDRSZ == MAXALIGN(ALLOC_CHUNKHDRSZ),
+	// 				 "sizeof(MemoryChunk) is not maxaligned");
+	// /* check we have enough space to store the freelist link */
+	// StaticAssertDecl(sizeof(AllocFreeListLink) <= (1 << ALLOC_MINBITS),
+	// 				 "sizeof(AllocFreeListLink) larger than minimum allocation size");
 
-	/*
-	 * Check whether the parameters match either available freelist.  We do
-	 * not need to demand a match of maxBlockSize.
-	 */
-	if (minContextSize == ALLOCSET_DEFAULT_MINSIZE &&
-		initBlockSize == ALLOCSET_DEFAULT_INITSIZE)
-		freeListIndex = 0;
-	else if (minContextSize == ALLOCSET_SMALL_MINSIZE &&
-			 initBlockSize == ALLOCSET_SMALL_INITSIZE)
-		freeListIndex = 1;
-	else
-		freeListIndex = -1;
+	// /*
+	//  * First, validate allocation parameters.  Once these were regular runtime
+	//  * tests and elog's, but in practice Asserts seem sufficient because
+	//  * nobody varies their parameters at runtime.  We somewhat arbitrarily
+	//  * enforce a minimum 1K block size.  We restrict the maximum block size to
+	//  * MEMORYCHUNK_MAX_BLOCKOFFSET as MemoryChunks are limited to this in
+	//  * regards to addressing the offset between the chunk and the block that
+	//  * the chunk is stored on.  We would be unable to store the offset between
+	//  * the chunk and block for any chunks that were beyond
+	//  * MEMORYCHUNK_MAX_BLOCKOFFSET bytes into the block if the block was to be
+	//  * larger than this.
+	//  */
+	// Assert(initBlockSize == MAXALIGN(initBlockSize) &&
+	// 	   initBlockSize >= 1024);
+	// Assert(maxBlockSize == MAXALIGN(maxBlockSize) &&
+	// 	   maxBlockSize >= initBlockSize &&
+	// 	   AllocHugeSizeIsValid(maxBlockSize)); /* must be safe to double */
+	// Assert(minContextSize == 0 ||
+	// 	   (minContextSize == MAXALIGN(minContextSize) &&
+	// 		minContextSize >= 1024 &&
+	// 		minContextSize <= maxBlockSize));
+	// Assert(maxBlockSize <= MEMORYCHUNK_MAX_BLOCKOFFSET);
 
-	/*
-	 * If a suitable freelist entry exists, just recycle that context.
-	 */
-	if (freeListIndex >= 0)
-	{
-		AllocSetFreeList *freelist = &context_freelists[freeListIndex];
+	// /*
+	//  * Check whether the parameters match either available freelist.  We do
+	//  * not need to demand a match of maxBlockSize.
+	//  */
+	// if (minContextSize == ALLOCSET_DEFAULT_MINSIZE &&
+	// 	initBlockSize == ALLOCSET_DEFAULT_INITSIZE)
+	// 	freeListIndex = 0;
+	// else if (minContextSize == ALLOCSET_SMALL_MINSIZE &&
+	// 		 initBlockSize == ALLOCSET_SMALL_INITSIZE)
+	// 	freeListIndex = 1;
+	// else
+	// 	freeListIndex = -1;
 
-		if (freelist->first_free != NULL)
-		{
-			/* Remove entry from freelist */
-			set = freelist->first_free;
-			freelist->first_free = (AllocSet) set->header.nextchild;
-			freelist->num_free--;
+	// /*
+	//  * If a suitable freelist entry exists, just recycle that context.
+	//  */
+	// if (freeListIndex >= 0)
+	// {
+	// 	AllocSetFreeList *freelist = &context_freelists[freeListIndex];
 
-			/* Update its maxBlockSize; everything else should be OK */
-			set->maxBlockSize = maxBlockSize;
+	// 	if (freelist->first_free != NULL)
+	// 	{
+	// 		/* Remove entry from freelist */
+	// 		set = freelist->first_free;
+	// 		freelist->first_free = (AllocSet) set->header.nextchild;
+	// 		freelist->num_free--;
 
-			/* Reinitialize its header, installing correct name and parent */
-			MemoryContextCreate((MemoryContext) set,
-								T_AllocSetContext,
-								MCTX_ASET_ID,
-								parent,
-								name);
+	// 		/* Update its maxBlockSize; everything else should be OK */
+	// 		set->maxBlockSize = maxBlockSize;
 
-			((MemoryContext) set)->mem_allocated =
-				KeeperBlock(set)->endptr - ((char *) set);
+	// 		/* Reinitialize its header, installing correct name and parent */
+	// 		MemoryContextCreate((MemoryContext) set,
+	// 							T_AllocSetContext,
+	// 							MCTX_ASET_ID,
+	// 							parent,
+	// 							name);
 
-			return (MemoryContext) set;
-		}
-	}
+	// 		((MemoryContext) set)->mem_allocated =
+	// 			KeeperBlock(set)->endptr - ((char *) set);
 
-	/* Determine size of initial block */
-	firstBlockSize = MAXALIGN(sizeof(AllocSetContext)) +
-		ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
-	if (minContextSize != 0)
-		firstBlockSize = Max(firstBlockSize, minContextSize);
-	else
-		firstBlockSize = Max(firstBlockSize, initBlockSize);
+	// 		return (MemoryContext) set;
+	// 	}
+	// }
 
-	/*
-	 * Allocate the initial block.  Unlike other aset.c blocks, it starts with
-	 * the context header and its block header follows that.
-	 */
-	set = (AllocSet) malloc(firstBlockSize);
-	if (set == NULL)
-	{
-		if (TopMemoryContext)
-			MemoryContextStats(TopMemoryContext);
-		ereport(ERROR,
-				(errcode(ERRCODE_OUT_OF_MEMORY),
-				 errmsg("out of memory"),
-				 errdetail("Failed while creating memory context \"%s\".",
-						   name)));
-	}
+	// /* Determine size of initial block */
+	// firstBlockSize = MAXALIGN(sizeof(AllocSetContext)) +
+	// 	ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
+	// if (minContextSize != 0)
+	// 	firstBlockSize = Max(firstBlockSize, minContextSize);
+	// else
+	// 	firstBlockSize = Max(firstBlockSize, initBlockSize);
 
-	/*
-	 * Avoid writing code that can fail between here and MemoryContextCreate;
-	 * we'd leak the header/initial block if we ereport in this stretch.
-	 */
+	// /*
+	//  * Allocate the initial block.  Unlike other aset.c blocks, it starts with
+	//  * the context header and its block header follows that.
+	//  */
+	// set = (AllocSet) malloc(firstBlockSize);
+	// if (set == NULL)
+	// {
+	// 	if (TopMemoryContext)
+	// 		MemoryContextStats(TopMemoryContext);
+	// 	ereport(ERROR,
+	// 			(errcode(ERRCODE_OUT_OF_MEMORY),
+	// 			 errmsg("out of memory"),
+	// 			 errdetail("Failed while creating memory context \"%s\".",
+	// 					   name)));
+	// }
 
-	/* Create a vpool associated with the context */
-	VALGRIND_CREATE_MEMPOOL(set, 0, false);
+	// /*
+	//  * Avoid writing code that can fail between here and MemoryContextCreate;
+	//  * we'd leak the header/initial block if we ereport in this stretch.
+	//  */
 
-	/*
-	 * Create a vchunk covering both the AllocSetContext struct and the keeper
-	 * block's header.  (Perhaps it would be more sensible for these to be two
-	 * separate vchunks, but doing that seems to tickle bugs in some versions
-	 * of Valgrind.)  We must have these vchunks, and also a vchunk for each
-	 * subsequently-added block header, so that Valgrind considers the
-	 * pointers within them while checking for leaked memory.  Note that
-	 * Valgrind doesn't distinguish between these vchunks and those created by
-	 * mcxt.c for the user-accessible-data chunks we allocate.
-	 */
-	VALGRIND_MEMPOOL_ALLOC(set, set, FIRST_BLOCKHDRSZ);
+	// /* Create a vpool associated with the context */
+	// VALGRIND_CREATE_MEMPOOL(set, 0, false);
 
-	/* Fill in the initial block's block header */
-	block = KeeperBlock(set);
-	block->aset = set;
-	block->freeptr = ((char *) block) + ALLOC_BLOCKHDRSZ;
-	block->endptr = ((char *) set) + firstBlockSize;
-	block->prev = NULL;
-	block->next = NULL;
+	// /*
+	//  * Create a vchunk covering both the AllocSetContext struct and the keeper
+	//  * block's header.  (Perhaps it would be more sensible for these to be two
+	//  * separate vchunks, but doing that seems to tickle bugs in some versions
+	//  * of Valgrind.)  We must have these vchunks, and also a vchunk for each
+	//  * subsequently-added block header, so that Valgrind considers the
+	//  * pointers within them while checking for leaked memory.  Note that
+	//  * Valgrind doesn't distinguish between these vchunks and those created by
+	//  * mcxt.c for the user-accessible-data chunks we allocate.
+	//  */
+	// VALGRIND_MEMPOOL_ALLOC(set, set, FIRST_BLOCKHDRSZ);
 
-	/* Mark unallocated space NOACCESS; leave the block header alone. */
-	VALGRIND_MAKE_MEM_NOACCESS(block->freeptr, block->endptr - block->freeptr);
+	// /* Fill in the initial block's block header */
+	// block = KeeperBlock(set);
+	// block->aset = set;
+	// block->freeptr = ((char *) block) + ALLOC_BLOCKHDRSZ;
+	// block->endptr = ((char *) set) + firstBlockSize;
+	// block->prev = NULL;
+	// block->next = NULL;
 
-	/* Remember block as part of block list */
-	set->blocks = block;
+	// /* Mark unallocated space NOACCESS; leave the block header alone. */
+	// VALGRIND_MAKE_MEM_NOACCESS(block->freeptr, block->endptr - block->freeptr);
 
-	/* Finish filling in aset-specific parts of the context header */
-	MemSetAligned(set->freelist, 0, sizeof(set->freelist));
+	// /* Remember block as part of block list */
+	// set->blocks = block;
 
-	set->initBlockSize = (uint32) initBlockSize;
-	set->maxBlockSize = (uint32) maxBlockSize;
-	set->nextBlockSize = (uint32) initBlockSize;
-	set->freeListIndex = freeListIndex;
+	// /* Finish filling in aset-specific parts of the context header */
+	// MemSetAligned(set->freelist, 0, sizeof(set->freelist));
 
-	/*
-	 * Compute the allocation chunk size limit for this context.  It can't be
-	 * more than ALLOC_CHUNK_LIMIT because of the fixed number of freelists.
-	 * If maxBlockSize is small then requests exceeding the maxBlockSize, or
-	 * even a significant fraction of it, should be treated as large chunks
-	 * too.  For the typical case of maxBlockSize a power of 2, the chunk size
-	 * limit will be at most 1/8th maxBlockSize, so that given a stream of
-	 * requests that are all the maximum chunk size we will waste at most
-	 * 1/8th of the allocated space.
-	 *
-	 * Also, allocChunkLimit must not exceed ALLOCSET_SEPARATE_THRESHOLD.
-	 */
-	StaticAssertStmt(ALLOC_CHUNK_LIMIT == ALLOCSET_SEPARATE_THRESHOLD,
-					 "ALLOC_CHUNK_LIMIT != ALLOCSET_SEPARATE_THRESHOLD");
+	// set->initBlockSize = (uint32) initBlockSize;
+	// set->maxBlockSize = (uint32) maxBlockSize;
+	// set->nextBlockSize = (uint32) initBlockSize;
+	// set->freeListIndex = freeListIndex;
 
-	/*
-	 * Determine the maximum size that a chunk can be before we allocate an
-	 * entire AllocBlock dedicated for that chunk.  We set the absolute limit
-	 * of that size as ALLOC_CHUNK_LIMIT but we reduce it further so that we
-	 * can fit about ALLOC_CHUNK_FRACTION chunks this size on a maximally
-	 * sized block.  (We opt to keep allocChunkLimit a power-of-2 value
-	 * primarily for legacy reasons rather than calculating it so that exactly
-	 * ALLOC_CHUNK_FRACTION chunks fit on a maximally sized block.)
-	 */
-	set->allocChunkLimit = ALLOC_CHUNK_LIMIT;
-	while ((Size) (set->allocChunkLimit + ALLOC_CHUNKHDRSZ) >
-		   (Size) ((maxBlockSize - ALLOC_BLOCKHDRSZ) / ALLOC_CHUNK_FRACTION))
-		set->allocChunkLimit >>= 1;
+	// /*
+	//  * Compute the allocation chunk size limit for this context.  It can't be
+	//  * more than ALLOC_CHUNK_LIMIT because of the fixed number of freelists.
+	//  * If maxBlockSize is small then requests exceeding the maxBlockSize, or
+	//  * even a significant fraction of it, should be treated as large chunks
+	//  * too.  For the typical case of maxBlockSize a power of 2, the chunk size
+	//  * limit will be at most 1/8th maxBlockSize, so that given a stream of
+	//  * requests that are all the maximum chunk size we will waste at most
+	//  * 1/8th of the allocated space.
+	//  *
+	//  * Also, allocChunkLimit must not exceed ALLOCSET_SEPARATE_THRESHOLD.
+	//  */
+	// StaticAssertStmt(ALLOC_CHUNK_LIMIT == ALLOCSET_SEPARATE_THRESHOLD,
+	// 				 "ALLOC_CHUNK_LIMIT != ALLOCSET_SEPARATE_THRESHOLD");
 
-	/* Finally, do the type-independent part of context creation */
-	MemoryContextCreate((MemoryContext) set,
-						T_AllocSetContext,
-						MCTX_ASET_ID,
-						parent,
-						name);
+	// /*
+	//  * Determine the maximum size that a chunk can be before we allocate an
+	//  * entire AllocBlock dedicated for that chunk.  We set the absolute limit
+	//  * of that size as ALLOC_CHUNK_LIMIT but we reduce it further so that we
+	//  * can fit about ALLOC_CHUNK_FRACTION chunks this size on a maximally
+	//  * sized block.  (We opt to keep allocChunkLimit a power-of-2 value
+	//  * primarily for legacy reasons rather than calculating it so that exactly
+	//  * ALLOC_CHUNK_FRACTION chunks fit on a maximally sized block.)
+	//  */
+	// set->allocChunkLimit = ALLOC_CHUNK_LIMIT;
+	// while ((Size) (set->allocChunkLimit + ALLOC_CHUNKHDRSZ) >
+	// 	   (Size) ((maxBlockSize - ALLOC_BLOCKHDRSZ) / ALLOC_CHUNK_FRACTION))
+	// 	set->allocChunkLimit >>= 1;
 
-	((MemoryContext) set)->mem_allocated = firstBlockSize;
+	// /* Finally, do the type-independent part of context creation */
+	// MemoryContextCreate((MemoryContext) set,
+	// 					T_AllocSetContext,
+	// 					MCTX_ASET_ID,
+	// 					parent,
+	// 					name);
 
-	return (MemoryContext) set;
+	// ((MemoryContext) set)->mem_allocated = firstBlockSize;
+
+	// return (MemoryContext) set;
 }
 
 /*

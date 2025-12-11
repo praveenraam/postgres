@@ -15,21 +15,21 @@ SA_EncodeHdrMask(MemoryContext context)
     ((chunk)->hdrmask = SA_EncodeHdrMask(context))
 
 
-SlabAllocator* getInstanceOfSA() {
-    if (gInstance == NULL) {
-        gInstance = (SlabAllocator*)malloc(sizeof(SlabAllocator));
-        if (gInstance != NULL) {
+// SlabAllocator* getInstanceOfSA() {
+//     if (gInstance == NULL) {
+//         gInstance = (SlabAllocator*)malloc(sizeof(SlabAllocator));
+//         if (gInstance != NULL) {
 
-            memset(gInstance, 0, sizeof(SlabAllocator));            
+//             memset(gInstance, 0, sizeof(SlabAllocator));            
 
-            gInstance->headerForCacheList = NULL;
-            gInstance->tailForCacheList = NULL;
+//             gInstance->headerForCacheList = NULL;
+//             gInstance->tailForCacheList = NULL;
             
-            pthread_mutex_init(&gInstance->allocator_mutex, NULL);
-        }
-    }
-    return gInstance;
-}
+//             pthread_mutex_init(&gInstance->allocator_mutex, NULL);
+//         }
+//     }
+//     return gInstance;
+// }
 
 void* SA_Allocater(MemoryContext context, Size object_size, int flags){
 //    fprintf(stderr, "Entered SA_Allocater (size=%zu)\n", (size_t) object_size);
@@ -100,17 +100,13 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
     return user_ptr;
 }
 
-void SA_Deallocater(void* ptr){
-    // fprintf(stderr, "Entered SA_Deallocater ptr=%p\n", ptr);
-    
+void SA_Deallocater(void* ptr)
+{
     if (ptr == NULL)
         return;
 
-    if(ptr == NULL) return;
-    
     MemoryChunk *chunk = PointerGetMemoryChunk(ptr);
-    // fprintf(stderr, "  chunk=%p\n", (void*)chunk);
-    
+
     if (MemoryChunkIsExternal(chunk))
     {
         fprintf(stderr,
@@ -119,8 +115,10 @@ void SA_Deallocater(void* ptr){
     }
 
     SlabBlock *block = (SlabBlock *) MemoryChunkGetBlock(chunk);
-    // fprintf(stderr, "  block=%p\n", (void*)block);
-
+    if (block == NULL) {
+        fprintf(stderr, "SA_Deallocater: MemoryChunkGetBlock returned NULL for ptr=%p\n", ptr);
+        return;
+    }
 
     SlabAllocator *instance = block->current_slab;
     SlabCache     *cache    = block->cache;
@@ -128,24 +126,15 @@ void SA_Deallocater(void* ptr){
     if (instance == NULL || cache == NULL)
     {
         fprintf(stderr,
-                "SA_Deallocater: corrupted block header (instance/cache NULL)\n");
+                "SA_Deallocater: corrupted block header (instance=%p, cache=%p)\n",
+                (void*)instance, (void*)cache);
         return;
     }
-    
+
     pthread_mutex_lock(&instance->allocator_mutex);
 
-    if(instance->headerForCacheList == NULL){
-        pthread_mutex_unlock(&instance->allocator_mutex);
-        return;
-    }   
+    SlabCacheDeallocator(cache, (void *) block);
 
-    DLL* current = instance->headerForCacheList;
-    while(current != NULL){
-        SlabCache* cache = current->slabCacheInDLL;
-        SlabCacheDeallocator(cache, (void*) block);
-
-        current = current->next;
-    }
     pthread_mutex_unlock(&instance->allocator_mutex);
 }
 
@@ -225,22 +214,26 @@ size_t SA_GetSizeOfObject(void* ptr){
 
 void SA_Reset(MemoryContext context){
     SlabAllocator *instance = (SlabAllocator *) context;
+    if (instance == NULL) return;
 
     pthread_mutex_lock(&instance->allocator_mutex);
-
-    if(instance->headerForCacheList == NULL){
+    if (instance->headerForCacheList == NULL) {
         pthread_mutex_unlock(&instance->allocator_mutex);
         return;
     }
 
-    SlabCache* cache = NULL;
-    DLL* current = instance->headerForCacheList;
-    while(current != NULL){
+    DLL *current = instance->headerForCacheList;
+    while (current != NULL) {
+        DLL *nextCache = current->next;
+
         SlabCacheDestroy(current->slabCacheInDLL);
-        DLL* nextCache = current->next;
-        current = NULL;
+        DLL_Destroy(current);
         current = nextCache;
     }
+
+    instance->headerForCacheList = NULL;
+    instance->tailForCacheList = NULL;
+    
     pthread_mutex_unlock(&instance->allocator_mutex);
 }
 
