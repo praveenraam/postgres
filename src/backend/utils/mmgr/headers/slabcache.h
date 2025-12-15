@@ -1,6 +1,5 @@
 #pragma once
 #include "slabStorage.h"
-#include <pthread.h>
 struct DLL;
 
 struct SlabBlock;     // forward declaration
@@ -24,7 +23,6 @@ typedef struct {
     size_t object_size;
     size_t unit_size;
     
-    pthread_mutex_t cache_mutex;
     // Cache Manager 
 } SlabCache;
 

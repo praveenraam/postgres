@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <pthread.h>
 #include "./slabcache.h"
 #include "./dll.h"
 
@@ -12,8 +11,6 @@ typedef struct SlabAllocator {
     MemoryContextData header;
     struct DLL* headerForCacheList;
     struct DLL* tailForCacheList;
-    pthread_mutex_t allocator_mutex;
-
 } SlabAllocator;
 
 // ---- function prototypes ----

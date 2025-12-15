@@ -20,24 +20,16 @@ SlabCache* SlabCacheInit(size_t c_object_size){
     cache->headerForPartial = NULL;
     cache->tailForPartial = NULL;
 
-    if (pthread_mutex_init(&cache->cache_mutex, NULL) != 0) {
-        free(cache);
-        return NULL;
-    }
-
     return cache;
 }
 
 void SlabCacheDestroy(SlabCache* cache){
     if(cache != NULL){
-        pthread_mutex_lock(&cache->cache_mutex);
+
 
         if(cache->headerForFull != NULL) DLL_DestroyAll(cache->headerForFull);
         if(cache->headerForPartial != NULL) DLL_DestroyAll(cache->headerForPartial);
 
-        pthread_mutex_unlock(&cache->cache_mutex);
-
-        pthread_mutex_destroy(&cache->cache_mutex);
         free(cache);
     }
 }
@@ -45,12 +37,10 @@ void SlabCacheDestroy(SlabCache* cache){
 void* SlabCacheAllocate(SlabCache* cache){
     
     if (cache == NULL) return NULL;
-    pthread_mutex_lock(&cache->cache_mutex);
 
     if(isDDL_ForPartialEmpty(cache)){
         SlabStorage* newSlab = SlabStorageInit(cache->unit_size,10);
         if (newSlab == NULL) {
-            pthread_mutex_unlock(&cache->cache_mutex);
             return NULL;
         }
 
@@ -60,9 +50,7 @@ void* SlabCacheAllocate(SlabCache* cache){
 
     void* allocatedPtr = SlabStorageAllocater(cache->headerForPartial->slabInDLL);
 
-    if (allocatedPtr == NULL) {
-        pthread_mutex_unlock(&cache->cache_mutex);
-        return NULL;
+    if (allocatedPtr == NULL) {        return NULL;
     }
 
     if(getStatus(cache->headerForPartial->slabInDLL) == FULL){
@@ -92,7 +80,6 @@ void* SlabCacheAllocate(SlabCache* cache){
         }
     }
 
-    pthread_mutex_unlock(&cache->cache_mutex);
     return allocatedPtr;
 
 }
@@ -100,13 +87,11 @@ void* SlabCacheAllocate(SlabCache* cache){
 void SlabCacheDeallocator(SlabCache* cache,void* ptr){
 
     if (cache == NULL || ptr == NULL) return;
-    pthread_mutex_lock(&cache->cache_mutex);
 
     DLL* current = cache->headerForPartial;
     while(current != NULL){
         if(SlabStorageContains(current->slabInDLL,ptr)){
             SlabStorageDeallocater(current->slabInDLL,ptr);
-            pthread_mutex_unlock(&cache->cache_mutex);
             return;
         }
         current = current->next;
@@ -141,13 +126,11 @@ void SlabCacheDeallocator(SlabCache* cache,void* ptr){
                     cache->headerForPartial = current;
                 }
             }
-            pthread_mutex_unlock(&cache->cache_mutex);
             return;
         }
         current = current->next;
     }
     
-    pthread_mutex_unlock(&cache->cache_mutex);
 }
 
 bool isDDL_ForPartialEmpty(SlabCache* cache){
@@ -157,12 +140,10 @@ bool isDDL_ForPartialEmpty(SlabCache* cache){
 bool isPtrInSlabCache(SlabCache* cache, void* ptr){
 
     if (cache == NULL || ptr == NULL) return false;
-    pthread_mutex_lock(&cache->cache_mutex);
 
     DLL* current = cache->headerForPartial;
     while(current != NULL){
         if(SlabStorageContains(current->slabInDLL,ptr)){
-            pthread_mutex_unlock(&cache->cache_mutex);
             return true;
         }
         current = current->next;
@@ -171,13 +152,11 @@ bool isPtrInSlabCache(SlabCache* cache, void* ptr){
     current = cache->headerForFull;
     while(current != NULL){
         if (SlabStorageContains(current->slabInDLL, ptr)) {
-            pthread_mutex_unlock(&cache->cache_mutex);
             return true;
         }
         current = current->next;
     }
     
-    pthread_mutex_unlock(&cache->cache_mutex);
     return false;
 }
 
@@ -185,13 +164,11 @@ bool isPtrInSlabCache(SlabCache* cache, void* ptr){
 size_t SlabCacheReturnFreeSpace(SlabCache* cache,void* ptr){
 
     if (cache == NULL || ptr == NULL) return 0;
-    pthread_mutex_lock(&cache->cache_mutex);
 
     DLL* current = cache->headerForPartial;
     while(current != NULL){
         if(SlabStorageContains(current->slabInDLL,ptr)){
             size_t returnValue = current->slabInDLL->totalMemorySizeOfArray - current->slabInDLL->usedMemorySizeOfArray;
-            pthread_mutex_unlock(&cache->cache_mutex);
             return returnValue;
         }
         current = current->next;
@@ -201,13 +178,11 @@ size_t SlabCacheReturnFreeSpace(SlabCache* cache,void* ptr){
     while(current != NULL){
         if (SlabStorageContains(current->slabInDLL, ptr)) {
             size_t returnValue = current->slabInDLL->totalMemorySizeOfArray - current->slabInDLL->usedMemorySizeOfArray;
-            pthread_mutex_unlock(&cache->cache_mutex);
             return returnValue;
         }
         current = current->next;
     }
     
-    pthread_mutex_unlock(&cache->cache_mutex);
     return 0;
 }
 
@@ -216,7 +191,6 @@ size_t nBlocksCountSlabCache(SlabCache *cache)
 {
 
     if (cache == NULL) return 0;
-    pthread_mutex_lock(&cache->cache_mutex);
     
     size_t returnValue = 0;
     
@@ -234,7 +208,6 @@ size_t nBlocksCountSlabCache(SlabCache *cache)
         current = current->next;
     }
     
-    pthread_mutex_unlock(&cache->cache_mutex);
     return returnValue;
 
 }
@@ -242,7 +215,6 @@ size_t nBlocksCountSlabCache(SlabCache *cache)
 size_t freeChunksSlabCache(SlabCache* cache){
 
     if (cache == NULL) return 0;
-    pthread_mutex_lock(&cache->cache_mutex);
 
     size_t returnValue = 0;
     
@@ -253,14 +225,12 @@ size_t freeChunksSlabCache(SlabCache* cache){
         current = current->next;
     }
     
-    pthread_mutex_unlock(&cache->cache_mutex);
     return returnValue;
 
 }
 
 size_t totalSpaceSlabCache(SlabCache* cache){
     if (cache == NULL) return 0;
-    pthread_mutex_lock(&cache->cache_mutex);
 
     size_t returnValue = 0;
     size_t slabCount = 0;
@@ -285,14 +255,12 @@ size_t totalSpaceSlabCache(SlabCache* cache){
         }
     }
     
-    pthread_mutex_unlock(&cache->cache_mutex);
     return returnValue;
 }
 
 size_t freeSpaceSlabCache(SlabCache* cache){
 
     if (cache == NULL) return 0;
-    pthread_mutex_lock(&cache->cache_mutex);
 
     size_t returnValue = 0;
     
@@ -303,7 +271,6 @@ size_t freeSpaceSlabCache(SlabCache* cache){
         current = current->next;
     }
     
-    pthread_mutex_unlock(&cache->cache_mutex);
     return returnValue;
 
 }

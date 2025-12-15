@@ -17,7 +17,6 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
         return NULL;
 
     
-    pthread_mutex_lock(&instance->allocator_mutex);
 
     if(instance->headerForCacheList == NULL){
         SlabCache* cache = SlabCacheInit(object_size);
@@ -40,8 +39,6 @@ void* SA_Allocater(MemoryContext context, Size object_size, int flags){
         cache = SlabCacheInit(object_size);
         instance->tailForCacheList = DLL_InsertAtEnd_SA(instance->tailForCacheList,cache);
     }
-
-    pthread_mutex_unlock(&instance->allocator_mutex);
 
     if (cache == NULL) {
         return NULL;
@@ -105,11 +102,8 @@ void SA_Deallocater(void* ptr)
         return;
     }
 
-    pthread_mutex_lock(&instance->allocator_mutex);
 
     SlabCacheDeallocator(cache, (void *) block);
-
-    pthread_mutex_unlock(&instance->allocator_mutex);
 }
 
 void* SA_Reallocater(void* from_address, Size new_required_size, int flags)
@@ -190,9 +184,7 @@ void SA_Reset(MemoryContext context){
     SlabAllocator *instance = (SlabAllocator *) context;
     if (instance == NULL) return;
 
-    pthread_mutex_lock(&instance->allocator_mutex);
     if (instance->headerForCacheList == NULL) {
-        pthread_mutex_unlock(&instance->allocator_mutex);
         return;
     }
 
@@ -207,9 +199,7 @@ void SA_Reset(MemoryContext context){
 
     instance->headerForCacheList = NULL;
     instance->tailForCacheList = NULL;
-    
-    pthread_mutex_unlock(&instance->allocator_mutex);
-}
+    }
 
 void SA_DeleteContext(MemoryContext context){
     SlabAllocator* instance = (SlabAllocator*) context;
@@ -220,7 +210,6 @@ void SA_DeleteContext(MemoryContext context){
 
     SA_Reset(context);
 
-    pthread_mutex_destroy(&instance->allocator_mutex);
     free(instance);
 
     // fprintf(stderr,"\nDestroy works correctly\n");
@@ -229,11 +218,8 @@ void SA_DeleteContext(MemoryContext context){
 bool SA_isEmpty(MemoryContext context){
     SlabAllocator *instance = (SlabAllocator *) context;
 
-    pthread_mutex_lock(&instance->allocator_mutex);
 
     bool is_empty = (instance->headerForCacheList == NULL);
-
-    pthread_mutex_unlock(&instance->allocator_mutex);
 
     return is_empty;
 }
@@ -249,8 +235,6 @@ MemoryContext SA_ContextCreate(MemoryContext parent, const char *name)
 
     sb->headerForCacheList = NULL;
     sb->tailForCacheList   = NULL;
-
-    pthread_mutex_init(&sb->allocator_mutex, NULL);
 
     MemoryContextCreate(
         (MemoryContext) sb,
@@ -302,10 +286,8 @@ void SA_stats(MemoryContext context, MemoryStatsPrintFunc printfunc, void *passt
     Size freeSpace = 0;
     Size slabCacheCount = 0;  // Counter for the number of slab caches
 
-    pthread_mutex_lock(&instance->allocator_mutex);
 
     if(instance->headerForCacheList == NULL){
-        pthread_mutex_unlock(&instance->allocator_mutex);
         return;
     }
 
@@ -357,8 +339,6 @@ void SA_stats(MemoryContext context, MemoryStatsPrintFunc printfunc, void *passt
         totals->totalspace += totalSpace;
         totals->freespace += freeSpace;
     }
-
-    pthread_mutex_unlock(&instance->allocator_mutex);
 
 }
 
